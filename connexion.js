@@ -16,6 +16,10 @@ async function connecterUtilisateur(email, motDePasseSaisi) {
 
         const utilisateur = rows[0];
 
+        console.log("Objet utilisateur complet :", utilisateur);
+        console.log("Mot de passe saisi :", motDePasseSaisi);
+        console.log("Mot de passe crypté en base :", utilisateur['MOT DE PASSE']);
+
         // 2. On compare le mot de passe saisi avec le hash stocké en base
         const motDePasseCrypteEnBase = utilisateur['MOT DE PASSE'];
         const match = await bcrypt.compare(motDePasseSaisi, motDePasseCrypteEnBase);

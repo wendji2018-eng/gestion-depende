@@ -1,15 +1,12 @@
 const db = require('./db');
 
-//fonction pour ajouter un revenu mensuel
-
-const ajouterRevenu = async (utilisateurId, depenseId, montant, mois) => {
+// Fonction pour ajouter un revenu mensuel
+const ajouterRevenu = async (utilisateurId, montant, mois) => {
     try {
-        const idDepenseFinal = depenseId !== undefined && depenseId !== '' ? depenseId : null;
-
-        const query = 'INSERT INTO REVENU_MENSUEL (UTILISATEUR_ID, DEPENSE_ID, MONTANT, MOIS) VALUES (?, ?, ?, ?)';
-        console.log("Requête envoyée avec :", [utilisateurId, idDepenseFinal, montant, mois]);
+        const query = 'INSERT INTO REVENU_MENSUEL (UTILISATEUR_ID, MONTANT, MOIS) VALUES (?, ?, ?)';
+        console.log("Requête envoyée avec :", [utilisateurId, montant, mois]);
         
-        const [result] = await db.query(query, [utilisateurId, idDepenseFinal, montant, mois]);
+        const [result] = await db.query(query, [utilisateurId, montant, mois]);
         
         return { success: true, message: 'Revenu ajouté avec succès !', id: result.insertId };
     } catch (error) {
@@ -18,16 +15,24 @@ const ajouterRevenu = async (utilisateurId, depenseId, montant, mois) => {
     }
 };
 
-
-//fonction pour modifier un revenu existant
-
-const modifierRevenu = async (idRevenu, utilisateurId, depenseId, montant, mois) => {
+// Fonction pour récupérer les revenus d'un utilisateur
+const obtenirRevenusParUtilisateur = async (utilisateurId) => {
     try {
-        const idDepenseFinal = depenseId !== undefined && depenseId !== '' ? depenseId : null;
+        const query = 'SELECT * FROM REVENU_MENSUEL WHERE UTILISATEUR_ID = ? ORDER BY MOIS DESC';
+        const [rows] = await db.query(query, [utilisateurId]);
+        return { success: true, data: rows };
+    } catch (error) {
+        console.error('ERREUR SQL BRUTE (Lecture Revenus) :', error);
+        return { success: false, message: error.message };
+    }
+};
 
-        const query = 'UPDATE REVENU_MENSUEL SET UTILISATEUR_ID = ?, DEPENSE_ID = ?, MONTANT = ?, MOIS = ? WHERE ID = ?';
+// Fonction pour modifier un revenu existant
+const modifierRevenu = async (idRevenu, utilisateurId, montant, mois) => {
+    try {
+        const query = 'UPDATE REVENU_MENSUEL SET UTILISATEUR_ID = ?, MONTANT = ?, MOIS = ? WHERE ID = ?';
         
-        const [result] = await db.query(query, [utilisateurId, idDepenseFinal, montant, mois, idRevenu]);
+        const [result] = await db.query(query, [utilisateurId, montant, mois, idRevenu]);
         
         if (result.affectedRows === 0) {
             return { success: false, message: 'Revenu non trouvé ou aucun changement effectué.' };
@@ -40,8 +45,7 @@ const modifierRevenu = async (idRevenu, utilisateurId, depenseId, montant, mois)
     }
 };
 
-//fonction pour supprimer un revenu existant
-
+// Fonction pour supprimer un revenu existant
 const supprimerRevenu = async (idRevenu) => {
     try {
         const query = 'DELETE FROM REVENU_MENSUEL WHERE ID = ?';
@@ -59,5 +63,10 @@ const supprimerRevenu = async (idRevenu) => {
     }
 };
 
-// exportation
-module.exports = { ajouterRevenu, modifierRevenu, supprimerRevenu };
+// Exportation
+module.exports = { 
+    ajouterRevenu, 
+    obtenirRevenusParUtilisateur, 
+    modifierRevenu, 
+    supprimerRevenu 
+};

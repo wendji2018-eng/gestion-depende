@@ -9,7 +9,7 @@ const db = mysql.createPool({
     database: process.env.DB_NAME
 });
 
-// 3. Test de connexion propre avec async/await
+// 3. Test de connexion 
 (async () => {
     try {
         const connection = await db.getConnection();

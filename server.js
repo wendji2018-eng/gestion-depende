@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 require('dotenv').config();
 const verifierToken = require('./authMiddleware');
 
@@ -9,7 +10,7 @@ const db = require('./db');
 const { inscrireUtilisateur, supprimerUtilisateur, obtenirInfosCompletesUtilisateur } = require('./utilisateur');
 const { connecterUtilisateur } = require('./connexion');
 const { obtenirCategories, ajouterCategorie } = require('./categories');
-const { ajouterDepense, obtenirDepensesParUtilisateur, modifierDepense } = require('./depenses');
+const { ajouterDepense, obtenirDepensesParUtilisateur, modifierDepense, supprimerDepense } = require('./depenses');
 const { ajouterRevenu, modifierRevenu, supprimerRevenu, obtenirRevenusParUtilisateur } = require('./revenus');
 const { calculerResteBudgetaire } = require('./ratios');
 
@@ -17,14 +18,12 @@ const { calculerResteBudgetaire } = require('./ratios');
 const app = express();
 app.use(cors());
 app.use(express.json());
- 
-// 1. ROUTE DE TEST
+app.use(express.static(path.join(__dirname)));
 
-app.get('/', (req, res) => {
-    res.send('Le serveur Node.js fonctionne !');
+// 1. ROUTE DE TEST API
+app.get('/api/status', (req, res) => {
+    res.json({ success: true, message: 'Le serveur Node.js fonctionne !' });
 });
-
-
 
 // 2. ROUTES UTILISATEURS (Inscription & Connexion)
 
@@ -48,8 +47,7 @@ app.post('/api/connexion', async (req, res) => {
     return res.status(401).json(resultat);
 });
 
-// route pour supprimer un utilisateur
-
+// Route pour supprimer un utilisateur
 app.delete('/api/utilisateurs/:id', async (req, res) => {
     try {
         const utilisateurId = req.params.id;
@@ -64,12 +62,11 @@ app.delete('/api/utilisateurs/:id', async (req, res) => {
 });
 
 
-
 // 3. ROUTES CATÉGORIES
 
 app.get('/api/categories', async (req, res) => {
     try {
-        const resultat = obtenirCategories(); // ou await selon ton implementation
+        const resultat = await obtenirCategories();
         if (resultat.success) return res.status(200).json(resultat);
         return res.status(400).json(resultat);
     } catch (error) {
@@ -89,7 +86,6 @@ app.post('/api/categories', async (req, res) => {
         res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
     }
 });
-
 
 
 // 4. ROUTES DÉPENSES PRÉVISIONNELLES
@@ -118,7 +114,7 @@ app.get('/api/depenses/:utilisateurId', async (req, res) => {
     }
 });
 
-// ---> ROUTE POUR MODIFIER UNE DÉPENSE <---
+// Route pour modifier une dépense
 app.put('/api/depenses/:id', async (req, res) => {
     try {
         const depenseId = req.params.id;
@@ -133,13 +129,26 @@ app.put('/api/depenses/:id', async (req, res) => {
     }
 });
 
+// Route pour supprimer une dépense
+app.delete('/api/depenses/:id', async (req, res) => {
+    try {
+        const depenseId = req.params.id;
+        const resultat = await supprimerDepense(depenseId);
+        
+        if (resultat.success) return res.status(200).json(resultat);
+        return res.status(404).json(resultat);
+    } catch (error) {
+        console.error('Erreur serveur :', error);
+        res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
+    }
+});
 
 
 // 5. ROUTES REVENUS MENSUELS
 
 app.post('/api/revenus', async (req, res) => {
-    const { utilisateurId, depenseId, montant, mois } = req.body;
-    const resultat = await ajouterRevenu(utilisateurId, depenseId, montant, mois);
+    const { utilisateurId, montant, mois } = req.body;
+    const resultat = await ajouterRevenu(utilisateurId, montant, mois);
     
     if (resultat.success) {
         return res.status(201).json(resultat);
@@ -159,7 +168,7 @@ app.get('/api/revenus/:utilisateurId', async (req, res) => {
     }
 });
 
-//  ROUTE POUR CALCULER LE RESTE 
+// Route pour calculer le reste budgetaire
 app.get('/api/revenus/:id/bilan', async (req, res) => {
     try {
         const revenuId = req.params.id;
@@ -175,8 +184,8 @@ app.get('/api/revenus/:id/bilan', async (req, res) => {
 app.put('/api/revenus/:id', async (req, res) => {
     try {
         const idRevenu = req.params.id;
-        const { utilisateurId, depenseId, montant, mois } = req.body;
-        const resultat = await modifierRevenu(idRevenu, utilisateurId, depenseId, montant, mois);
+        const { utilisateurId, montant, mois } = req.body;
+        const resultat = await modifierRevenu(idRevenu, utilisateurId, montant, mois);
         
         if (resultat.success) return res.status(200).json(resultat);
         return res.status(404).json(resultat);

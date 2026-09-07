@@ -19,10 +19,14 @@ async function inscrireUtilisateur(nom, email, numero, motDePasse) {
         const saltRounds = 10;
         const motDePasseCrypte = await bcrypt.hash(motDePasse, saltRounds);
 
-        // 3. Insérer l'utilisateur
+        // 3. Insérer l'utilisateur (numéro optionnel)
+        let finalNumero = null;
+        if (numero !== undefined && numero !== null && String(numero).trim() !== '') {
+            finalNumero = String(numero).trim();
+        }
 
         const sqlInsertion = 'INSERT INTO UTILISATEUR (NOM, `E-MAIL`, NUMERO, `MOT DE PASSE`) VALUES (?, ?, ?, ?)';
-        const [result] = await db.query(sqlInsertion, [nom, email, numero, motDePasseCrypte]);
+        const [result] = await db.query(sqlInsertion, [nom, email, finalNumero, motDePasseCrypte]);
 
         return { success: true, message: "Utilisateur inscrit avec succès !", id: result.insertId };
 

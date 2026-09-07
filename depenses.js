@@ -50,10 +50,12 @@ const modifierDepense = async (depenseId, revenuId, categorieId, montantCat, tit
 const obtenirDepensesParUtilisateur = async (utilisateurId) => {
     try {
         const query = `
-            SELECT d.* 
+            SELECT d.*, c.NOM_CATEGORIE 
             FROM DEPENSE_PREVISIONNELLE d
             JOIN REVENU_MENSUEL r ON d.REVENU_ID = r.ID
+            LEFT JOIN CATEGORIE c ON d.CATEGORIE_ID = c.ID
             WHERE r.UTILISATEUR_ID = ?
+            ORDER BY d.ID DESC
         `;
         const [rows] = await db.query(query, [utilisateurId]);
         
@@ -64,10 +66,25 @@ const obtenirDepensesParUtilisateur = async (utilisateurId) => {
     }
 };
 
+// Fonction pour supprimer une dépense
+const supprimerDepense = async (depenseId) => {
+    try {
+        const [result] = await db.query('DELETE FROM DEPENSE_PREVISIONNELLE WHERE ID = ?', [depenseId]);
+        if (result.affectedRows === 0) {
+            return { success: false, message: 'Dépense non trouvée.' };
+        }
+        return { success: true, message: 'Dépense supprimée avec succès !' };
+    } catch (error) {
+        console.error('ERREUR SQL (Supprimer Dépense) :', error);
+        return { success: false, message: error.message };
+    }
+};
+
 // exports des fonctions 
 module.exports = { 
     ajouterDepense, 
     obtenirDepenses, 
     modifierDepense, 
-    obtenirDepensesParUtilisateur 
+    obtenirDepensesParUtilisateur,
+    supprimerDepense
 };
