@@ -28,19 +28,40 @@ async function initApp() {
   }
 }
 
-function checkAuthStatus() {
+function showView(viewName) {
   const authSection = document.getElementById('authSection');
+  const revenusSection = document.getElementById('revenusSection');
   const dashboardSection = document.getElementById('dashboardSection');
   const navUser = document.getElementById('navUser');
 
-  if (state.token && state.userId) {
-    if (authSection) authSection.classList.add('d-none');
-    if (dashboardSection) dashboardSection.classList.remove('d-none');
-    if (navUser) navUser.classList.remove('d-none');
-  } else {
+  if (viewName === 'auth') {
     if (authSection) authSection.classList.remove('d-none');
+    if (revenusSection) revenusSection.classList.add('d-none');
     if (dashboardSection) dashboardSection.classList.add('d-none');
     if (navUser) navUser.classList.add('d-none');
+  } else if (viewName === 'revenus') {
+    if (authSection) authSection.classList.add('d-none');
+    if (revenusSection) revenusSection.classList.remove('d-none');
+    if (dashboardSection) dashboardSection.classList.add('d-none');
+    if (navUser) navUser.classList.remove('d-none');
+    renderRevenuesCards();
+  } else if (viewName === 'dashboard') {
+    if (authSection) authSection.classList.add('d-none');
+    if (revenusSection) revenusSection.classList.add('d-none');
+    if (dashboardSection) dashboardSection.classList.remove('d-none');
+    if (navUser) navUser.classList.remove('d-none');
+  }
+}
+
+function checkAuthStatus() {
+  if (state.token && state.userId) {
+    if (state.selectedRevenuId) {
+      showView('dashboard');
+    } else {
+      showView('revenus');
+    }
+  } else {
+    showView('auth');
   }
 }
 
@@ -60,13 +81,14 @@ async function login(email, motDePasse) {
       state.token = data.token;
       state.userId = data.utilisateur.id;
       state.user = data.utilisateur;
+      state.selectedRevenuId = null; // Always open revenues selection screen on new login
 
       localStorage.setItem('token', data.token);
       localStorage.setItem('userId', data.utilisateur.id);
 
       showToast('Connexion réussie ! Bienvenue.', 'success');
-      checkAuthStatus();
       await loadDashboardData();
+      showView('revenus');
     } else {
       showToast(data.message || 'Identifiants incorrects', 'danger');
     }
@@ -103,6 +125,7 @@ function logout() {
   state.token = null;
   state.userId = null;
   state.user = null;
+  state.selectedRevenuId = null;
   localStorage.removeItem('token');
   localStorage.removeItem('userId');
   showToast('Déconnexion réussie.', 'info');
@@ -140,13 +163,9 @@ async function loadDashboardData() {
     if (dataRev.success) state.revenus = dataRev.data;
     if (dataDep.success) state.depenses = dataDep.data;
 
-    // Set default selected revenue if none selected
-    if (state.revenus.length > 0 && !state.selectedRevenuId) {
-      state.selectedRevenuId = state.revenus[0].ID;
-    }
-
     renderCategoriesDropdown();
     renderRevenuesSelect();
+    renderRevenuesCards();
     await updateFinancialKPIs();
     renderExpensesTable();
     updateCharts();
@@ -260,6 +279,143 @@ function renderRevenuesSelect() {
       </option>
     `).join('');
   }
+}
+
+function renderRevenuesCards() {
+  const container = document.getElementById('revenusCardsContainer');
+  if (!container) return;
+
+  const searchInput = document.getElementById('revenueSearchInput');
+  const query = searchInput ? searchInput.value.toLowerCase().trim() : '';
+
+  let filteredRevenus = state.revenus || [];
+  if (query) {
+    filteredRevenus = filteredRevenus.filter(r => {
+      const monthStr = formatDateMonth(r.MOIS).toLowerCase();
+      const rawDateStr = (r.MOIS || '').toLowerCase();
+      return monthStr.includes(query) || rawDateStr.includes(query);
+    });
+  }
+
+  if (!state.revenus || state.revenus.length === 0) {
+    container.innerHTML = `
+      <div class="col-12 text-center py-5">
+        <div class="glass-card p-5 mx-auto" style="max-width: 500px;">
+          <div class="logo-badge mx-auto mb-3" style="width: 64px; height: 64px; font-size: 2rem;">
+            <i class="bi bi-wallet2"></i>
+          </div>
+          <h3 class="fw-bold mb-2">Aucun Revenu Mensuel</h3>
+          <p class="text-muted small mb-4">
+            Vous n'avez pas encore configuré de revenu mensuel. Ajoutez votre premier revenu pour commencer à suivre vos dépenses prévisionnelles.
+          </p>
+          <button class="btn btn-stitch-primary" data-bs-toggle="modal" data-bs-target="#addRevenueModal">
+            <i class="bi bi-plus-circle-fill me-1"></i> Ajouter mon premier revenu
+          </button>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  if (filteredRevenus.length === 0) {
+    container.innerHTML = `
+      <div class="col-12 text-center py-4">
+        <div class="glass-card p-4 mx-auto" style="max-width: 450px;">
+          <i class="bi bi-search fs-1 text-muted d-block mb-2"></i>
+          <h5 class="fw-bold mb-1">Aucun résultat trouvé</h5>
+          <p class="text-muted small mb-0">Aucun revenu ne correspond à "${escapeHtml(query)}".</p>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = filteredRevenus.map(r => {
+    const revExpenses = state.depenses.filter(d => d.REVENU_ID == r.ID);
+    const totalExp = revExpenses.reduce((sum, d) => sum + parseFloat(d.MONTANT_CAT || 0), 0);
+    const solde = parseFloat(r.MONTANT || 0) - totalExp;
+    const isPositive = solde >= 0;
+
+    return `
+      <div class="col-12">
+        <div class="glass-card revenue-list-item d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
+          <div class="d-flex align-items-center gap-3">
+            <div class="logo-badge" style="width: 48px; height: 48px; font-size: 1.3rem;">
+              <i class="bi bi-calendar-event"></i>
+            </div>
+            <div>
+              <div class="d-flex align-items-center gap-2 mb-1">
+                <span class="fw-bold fs-5 text-white">${formatDateMonth(r.MOIS)}</span>
+                <span class="badge-status ${isPositive ? 'badge-paid' : 'badge-canceled'}">
+                  ${isPositive ? 'Excédent' : 'Déficit'}
+                </span>
+              </div>
+              <div class="text-muted small">
+                Montant Prévu : <strong class="text-success">${formatCurrency(r.MONTANT)}</strong>
+                <span class="mx-2">•</span>
+                Dépenses (${revExpenses.length}) : <strong class="text-light">${formatCurrency(totalExp)}</strong>
+              </div>
+            </div>
+          </div>
+
+          <div class="d-flex align-items-center gap-3 ms-auto ms-md-0">
+            <div class="text-end d-none d-lg-block me-2">
+              <div class="text-muted fs-8">Reste disponible</div>
+              <div class="fw-bold fs-6 ${isPositive ? 'text-gradient' : 'text-danger'}">${formatCurrency(solde)}</div>
+            </div>
+            <button
+              class="btn btn-stitch-primary btn-sm px-3"
+              onclick="selectRevenuAndOpenDashboard(${r.ID})"
+            >
+              <i class="bi bi-pie-chart-fill me-1"></i> Bilan Détaillé
+            </button>
+            <button
+              class="btn btn-stitch-danger btn-sm px-2 py-1"
+              onclick="deleteRevenu(${r.ID})"
+              title="Supprimer ce revenu"
+            >
+              <i class="bi bi-trash"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+async function selectRevenuAndOpenDashboard(revenuId) {
+  state.selectedRevenuId = revenuId;
+  renderRevenuesSelect();
+  await updateFinancialKPIs();
+  renderExpensesTable();
+  updateCharts();
+  showView('dashboard');
+}
+
+function deleteRevenu(revenuId) {
+  showConfirmModal(
+    'Supprimer ce revenu ?',
+    'Voulez-vous vraiment supprimer ce revenu mensuel et toutes les dépenses associées ?',
+    async () => {
+      try {
+        const res = await fetch(`${API_BASE}/revenus/${revenuId}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (data.success) {
+          showToast('Revenu supprimé avec succès', 'success');
+          if (state.selectedRevenuId == revenuId) {
+            state.selectedRevenuId = null;
+          }
+          await loadDashboardData();
+          showView('revenus');
+        } else {
+          showToast(data.message || 'Erreur lors de la suppression', 'danger');
+        }
+      } catch (err) {
+        console.error(err);
+        showToast('Erreur réseau', 'danger');
+      }
+    }
+  );
 }
 
 function renderExpensesTable() {
@@ -388,6 +544,14 @@ function setupFormListeners() {
     });
   }
 
+  // Revenue Search Filter
+  const searchInput = document.getElementById('revenueSearchInput');
+  if (searchInput) {
+    searchInput.addEventListener('input', () => {
+      renderRevenuesCards();
+    });
+  }
+
   // Revenue Change
   const revSelect = document.getElementById('selectedRevenuSelect');
   if (revSelect) {
@@ -420,9 +584,15 @@ function setupFormListeners() {
         const data = await res.json();
         if (data.success) {
           showToast('Revenu mensuel ajouté !', 'success');
-          bootstrap.Modal.getInstance(document.getElementById('addRevenueModal')).hide();
+          const modalEl = document.getElementById('addRevenueModal');
+          const modalInstance = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+          modalInstance.hide();
           addRevenueForm.reset();
+          if (data.id) {
+            state.selectedRevenuId = data.id;
+          }
           await loadDashboardData();
+          showView('revenus');
         } else {
           showToast(data.message || 'Erreur lors de l\'ajout', 'danger');
         }
@@ -499,24 +669,26 @@ function setupFormListeners() {
   }
 }
 
-async function deleteExpense(depenseId) {
-  if (!confirm('Voulez-vous vraiment supprimer cette dépense ?')) return;
-
-  try {
-    const res = await fetch(`${API_BASE}/depenses/${depenseId}`, {
-      method: 'DELETE'
-    });
-    const data = await res.json();
-    if (data.success) {
-      showToast('Dépense supprimée avec succès', 'success');
-      await loadDashboardData();
-    } else {
-      showToast(data.message || 'Erreur lors de la suppression', 'danger');
+function deleteExpense(depenseId) {
+  showConfirmModal(
+    'Supprimer la dépense ?',
+    'Voulez-vous vraiment supprimer cette dépense prévisionnelle ?',
+    async () => {
+      try {
+        const res = await fetch(`${API_BASE}/depenses/${depenseId}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (data.success) {
+          showToast('Dépense supprimée avec succès', 'success');
+          await loadDashboardData();
+        } else {
+          showToast(data.message || 'Erreur lors de la suppression', 'danger');
+        }
+      } catch (err) {
+        console.error(err);
+        showToast('Erreur réseau', 'danger');
+      }
     }
-  } catch (err) {
-    console.error(err);
-    showToast('Erreur réseau', 'danger');
-  }
+  );
 }
 
 // Modal helper for editing expense
@@ -618,4 +790,28 @@ function togglePasswordVisibility(inputId, iconId) {
     icon.classList.remove('bi-eye');
     icon.classList.add('bi-eye-slash');
   }
+}
+
+function showConfirmModal(title, message, onConfirmCallback) {
+  const modalEl = document.getElementById('deleteConfirmModal');
+  const titleEl = document.getElementById('deleteConfirmTitle');
+  const msgEl = document.getElementById('deleteConfirmMessage');
+  const confirmBtn = document.getElementById('confirmDeleteBtn');
+
+  if (!modalEl || !confirmBtn) return;
+
+  if (titleEl) titleEl.textContent = title;
+  if (msgEl) msgEl.textContent = message;
+
+  const modalInstance = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+
+  const newConfirmBtn = confirmBtn.cloneNode(true);
+  confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+
+  newConfirmBtn.addEventListener('click', async () => {
+    modalInstance.hide();
+    await onConfirmCallback();
+  });
+
+  modalInstance.show();
 }

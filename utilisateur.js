@@ -1,5 +1,5 @@
 const bcrypt = require('bcrypt');
-const db = require('./db'); 
+const db = require('./db');
 
 // Fonction pour inscrire un utilisateur
 
@@ -19,7 +19,7 @@ async function inscrireUtilisateur(nom, email, numero, motDePasse) {
         const saltRounds = 10;
         const motDePasseCrypte = await bcrypt.hash(motDePasse, saltRounds);
 
-        // 3. Insérer l'utilisateur (numéro optionnel)
+        // 3. Insérer l'utilisateur 
         let finalNumero = null;
         if (numero !== undefined && numero !== null && String(numero).trim() !== '') {
             finalNumero = String(numero).trim();
@@ -60,7 +60,7 @@ async function obtenirInfosCompletesUtilisateur(utilisateurId) {
         const [rows] = await db.query(sql, [utilisateurId]);
 
         // Si l'utilisateur n'existe pas du tout dans la base
-        
+
         if (rows.length === 0) {
             return { success: false, message: "Utilisateur non trouvé." };
         }

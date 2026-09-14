@@ -168,10 +168,18 @@
                         <button
                           class="btn btn-outline-secondary text-muted bg-dark border-secondary"
                           type="button"
-                          onclick="togglePasswordVisibility('loginPassword', 'toggleLoginPassIcon')"
+                          onclick="
+                            togglePasswordVisibility(
+                              'loginPassword',
+                              'toggleLoginPassIcon',
+                            )
+                          "
                           title="Afficher/Masquer le mot de passe"
                         >
-                          <i class="bi bi-eye-slash" id="toggleLoginPassIcon"></i>
+                          <i
+                            class="bi bi-eye-slash"
+                            id="toggleLoginPassIcon"
+                          ></i>
                         </button>
                       </div>
                     </div>
@@ -222,27 +230,32 @@
                         placeholder="690000000 (Optionnel)"
                       />
                     </div>
-                      <div class="input-group">
-                        <span
-                          class="input-group-text bg-dark border-secondary text-muted"
-                          ><i class="bi bi-lock"></i
-                        ></span>
-                        <input
-                          type="password"
-                          id="regPassword"
-                          class="form-control"
-                          placeholder="••••••••"
-                          required
-                        />
-                        <button
-                          class="btn btn-outline-secondary text-muted bg-dark border-secondary"
-                          type="button"
-                          onclick="togglePasswordVisibility('regPassword', 'toggleRegPassIcon')"
-                          title="Afficher/Masquer le mot de passe"
-                        >
-                          <i class="bi bi-eye-slash" id="toggleRegPassIcon"></i>
-                        </button>
-                      </div>
+                    <div class="input-group">
+                      <span
+                        class="input-group-text bg-dark border-secondary text-muted"
+                        ><i class="bi bi-lock"></i
+                      ></span>
+                      <input
+                        type="password"
+                        id="regPassword"
+                        class="form-control"
+                        placeholder="••••••••"
+                        required
+                      />
+                      <button
+                        class="btn btn-outline-secondary text-muted bg-dark border-secondary"
+                        type="button"
+                        onclick="
+                          togglePasswordVisibility(
+                            'regPassword',
+                            'toggleRegPassIcon',
+                          )
+                        "
+                        title="Afficher/Masquer le mot de passe"
+                      >
+                        <i class="bi bi-eye-slash" id="toggleRegPassIcon"></i>
+                      </button>
+                    </div>
                     <button
                       type="submit"
                       class="btn btn-stitch-primary w-100 justify-content-center py-2-5"
@@ -258,7 +271,58 @@
       </section>
 
       <!-- ===================================================================
-         DASHBOARD SECTION (Displayed when authenticated)
+         REVENUS SELECTION SECTION
+         =================================================================== -->
+      <section id="revenusSection" class="d-none">
+        <!-- Action Bar with Search Filter & Add Button -->
+        <div class="row align-items-center mb-4 g-3">
+          <div class="col-md-5">
+            <h1 class="h3 fw-bold mb-1">
+              Vos <span class="text-gradient">Revenus Mensuels</span>
+            </h1>
+            <p class="text-muted small mb-0">
+              Sélectionnez une période pour afficher le bilan et la gestion
+              détaillée.
+            </p>
+          </div>
+          <div
+            class="col-md-7 d-flex flex-wrap align-items-center justify-content-md-end gap-2"
+          >
+            <!-- Search input by month -->
+            <div
+              class="input-group glass-pill p-0 overflow-hidden"
+              style="max-width: 280px"
+            >
+              <span
+                class="input-group-text bg-transparent border-0 text-muted ps-3"
+              >
+                <i class="bi bi-search"></i>
+              </span>
+              <input
+                type="text"
+                id="revenueSearchInput"
+                class="form-control border-0 bg-transparent text-white small"
+                placeholder="Rechercher un mois (ex: Septembre)..."
+              />
+            </div>
+            <button
+              class="btn btn-stitch-primary btn-sm"
+              data-bs-toggle="modal"
+              data-bs-target="#addRevenueModal"
+            >
+              <i class="bi bi-plus-circle-fill me-1"></i> Nouveau Revenu
+            </button>
+          </div>
+        </div>
+
+        <!-- Grid Container for Revenue Cards -->
+        <div id="revenusCardsContainer" class="row g-4 mb-4">
+          <!-- Cards rendered dynamically -->
+        </div>
+      </section>
+
+      <!-- ===================================================================
+         DASHBOARD SECTION 
          =================================================================== -->
       <section id="dashboardSection" class="d-none">
         <!-- Action Bar & Revenue Selector -->
@@ -275,6 +339,15 @@
           <div
             class="col-md-6 d-flex flex-wrap align-items-center justify-content-md-end gap-2"
           >
+            <!-- Return to Revenues Button -->
+            <button
+              class="btn btn-stitch-secondary btn-sm"
+              onclick="showView('revenus')"
+              title="Retourner à la liste de vos revenus mensuels"
+            >
+              <i class="bi bi-arrow-left me-1"></i> Mes Revenus
+            </button>
+
             <!-- Month Selector -->
             <div class="glass-pill d-flex align-items-center gap-2">
               <i class="bi bi-calendar-event text-primary ms-1"></i>
@@ -710,6 +783,47 @@
               style="max-height: 200px; overflow-y: auto"
             >
               <!-- Category items -->
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal Confirm Delete -->
+    <div class="modal fade" id="deleteConfirmModal" tabindex="-1">
+      <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content stitch-modal text-center p-3">
+          <div class="modal-body">
+            <div
+              class="logo-badge mx-auto mb-3"
+              style="
+                width: 56px;
+                height: 56px;
+                font-size: 1.8rem;
+                background: var(--accent-danger);
+              "
+            >
+              <i class="bi bi-exclamation-triangle-fill text-white"></i>
+            </div>
+            <h5 class="fw-bold mb-2" id="deleteConfirmTitle">Supprimer ?</h5>
+            <p class="text-muted small mb-4" id="deleteConfirmMessage">
+              Êtes-vous sûr de vouloir supprimer cet élément ?
+            </p>
+            <div class="d-flex justify-content-center gap-2">
+              <button
+                type="button"
+                class="btn btn-stitch-secondary btn-sm px-3"
+                data-bs-dismiss="modal"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                class="btn btn-stitch-danger btn-sm px-3"
+                id="confirmDeleteBtn"
+              >
+                Supprimer
+              </button>
             </div>
           </div>
         </div>
