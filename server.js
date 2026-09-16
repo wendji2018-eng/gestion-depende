@@ -159,7 +159,11 @@ app.post('/api/revenus', async (req, res) => {
 app.get('/api/revenus/:utilisateurId', async (req, res) => {
     try {
         const utilisateurId = req.params.utilisateurId;
-        const resultat = await obtenirRevenusParUtilisateur(utilisateurId);
+        const { page, limit, search, all } = req.query;
+        const pageParam = all === 'true' ? 'all' : (page || 1);
+        const limitParam = all === 'true' ? 'all' : (limit || 5);
+
+        const resultat = await obtenirRevenusParUtilisateur(utilisateurId, pageParam, limitParam, search || '');
         if (resultat.success) return res.status(200).json(resultat);
         return res.status(400).json(resultat);
     } catch (error) {

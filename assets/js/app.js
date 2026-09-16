@@ -6,10 +6,17 @@ const state = {
   token: localStorage.getItem('token') || null,
   userId: localStorage.getItem('userId') || null,
   revenus: [],
+  allRevenus: [],
   depenses: [],
   categories: [],
   selectedRevenuId: null,
-  chartInstance: null
+  chartInstance: null,
+  revenusPagination: {
+    page: 1,
+    limit: 5,
+    total: 0,
+    totalPages: 1
+  }
 };
 
 // --- INITIALIZATION ---
@@ -137,19 +144,24 @@ async function loadDashboardData() {
   if (!state.userId) return;
 
   try {
-    // Parallel fetching categories, user profile, revenues & expenses
-    const [resCat, resProfile, resRev, resDep] = await Promise.all([
+    const searchInput = document.getElementById('revenueSearchInput');
+    const search = searchInput ? searchInput.value.trim() : '';
+
+    // Parallel fetching categories, user profile, all revenues, paginated revenues & expenses
+    const [resCat, resProfile, resRevAll, resRevPage, resDep] = await Promise.all([
       fetch(`${API_BASE}/categories`),
       fetch(`${API_BASE}/utilisateur/${state.userId}/complet`, {
         headers: { 'Authorization': `Bearer ${state.token}` }
       }),
-      fetch(`${API_BASE}/revenus/${state.userId}`),
+      fetch(`${API_BASE}/revenus/${state.userId}?all=true`),
+      fetch(`${API_BASE}/revenus/${state.userId}?page=${state.revenusPagination.page}&limit=${state.revenusPagination.limit}&search=${encodeURIComponent(search)}`),
       fetch(`${API_BASE}/depenses/${state.userId}`)
     ]);
 
     const dataCat = await resCat.json();
     const dataProfile = await resProfile.json();
-    const dataRev = await resRev.json();
+    const dataRevAll = await resRevAll.json();
+    const dataRevPage = await resRevPage.json();
     const dataDep = await resDep.json();
 
     if (dataCat.success) state.categories = dataCat.data;
@@ -160,7 +172,13 @@ async function loadDashboardData() {
       };
       updateUserInfoUI();
     }
-    if (dataRev.success) state.revenus = dataRev.data;
+    if (dataRevAll.success) state.allRevenus = dataRevAll.data;
+    if (dataRevPage.success) {
+      state.revenus = dataRevPage.data;
+      if (dataRevPage.pagination) {
+        state.revenusPagination = dataRevPage.pagination;
+      }
+    }
     if (dataDep.success) state.depenses = dataDep.data;
 
     renderCategoriesDropdown();
@@ -174,6 +192,40 @@ async function loadDashboardData() {
     console.error('Erreur chargement tableau de bord :', err);
     showToast('Erreur de synchronisation avec le serveur', 'danger');
   }
+}
+
+async function loadRevenusPage(page = state.revenusPagination.page, limit = state.revenusPagination.limit, search = null) {
+  if (!state.userId) return;
+  if (search === null) {
+    const searchInput = document.getElementById('revenueSearchInput');
+    search = searchInput ? searchInput.value.trim() : '';
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/revenus/${state.userId}?page=${page}&limit=${limit}&search=${encodeURIComponent(search)}`);
+    const data = await res.json();
+    if (data.success) {
+      state.revenus = data.data;
+      if (data.pagination) {
+        state.revenusPagination = data.pagination;
+      }
+      renderRevenuesCards();
+    }
+  } catch (err) {
+    console.error('Erreur lors du chargement des revenus :', err);
+  }
+}
+
+async function changeRevenusPage(newPage) {
+  if (newPage < 1 || newPage > state.revenusPagination.totalPages) return;
+  state.revenusPagination.page = newPage;
+  await loadRevenusPage(newPage);
+}
+
+async function changeRevenusLimit(newLimit) {
+  state.revenusPagination.limit = parseInt(newLimit) || 5;
+  state.revenusPagination.page = 1;
+  await loadRevenusPage(1, state.revenusPagination.limit);
 }
 
 // 3. Financial Calculations & KPIs
@@ -259,21 +311,22 @@ function renderCategoriesDropdown() {
 function renderRevenuesSelect() {
   const revSelect = document.getElementById('selectedRevenuSelect');
   const modalRevSelect = document.getElementById('expenseRevenuSelect');
+  const revenuesList = state.allRevenus && state.allRevenus.length > 0 ? state.allRevenus : state.revenus;
 
   if (revSelect) {
-    revSelect.innerHTML = state.revenus.map(r => `
+    revSelect.innerHTML = revenuesList.map(r => `
       <option value="${r.ID}" ${r.ID == state.selectedRevenuId ? 'selected' : ''}>
         Mois : ${formatDateMonth(r.MOIS)} - ${formatCurrency(r.MONTANT)}
       </option>
     `).join('');
 
-    if (state.revenus.length === 0) {
+    if (revenuesList.length === 0) {
       revSelect.innerHTML = '<option value="">Aucun revenu créé</option>';
     }
   }
 
   if (modalRevSelect) {
-    modalRevSelect.innerHTML = state.revenus.map(r => `
+    modalRevSelect.innerHTML = revenuesList.map(r => `
       <option value="${r.ID}">
         Mois : ${formatDateMonth(r.MOIS)} (${formatCurrency(r.MONTANT)})
       </option>
@@ -288,16 +341,7 @@ function renderRevenuesCards() {
   const searchInput = document.getElementById('revenueSearchInput');
   const query = searchInput ? searchInput.value.toLowerCase().trim() : '';
 
-  let filteredRevenus = state.revenus || [];
-  if (query) {
-    filteredRevenus = filteredRevenus.filter(r => {
-      const monthStr = formatDateMonth(r.MOIS).toLowerCase();
-      const rawDateStr = (r.MOIS || '').toLowerCase();
-      return monthStr.includes(query) || rawDateStr.includes(query);
-    });
-  }
-
-  if (!state.revenus || state.revenus.length === 0) {
+  if (!state.revenus || (state.revenus.length === 0 && !query && state.revenusPagination.total === 0)) {
     container.innerHTML = `
       <div class="col-12 text-center py-5">
         <div class="glass-card p-5 mx-auto" style="max-width: 500px;">
@@ -314,10 +358,11 @@ function renderRevenuesCards() {
         </div>
       </div>
     `;
+    renderPaginationControls();
     return;
   }
 
-  if (filteredRevenus.length === 0) {
+  if (state.revenus.length === 0 && (query || state.revenusPagination.total > 0)) {
     container.innerHTML = `
       <div class="col-12 text-center py-4">
         <div class="glass-card p-4 mx-auto" style="max-width: 450px;">
@@ -327,10 +372,11 @@ function renderRevenuesCards() {
         </div>
       </div>
     `;
+    renderPaginationControls();
     return;
   }
 
-  container.innerHTML = filteredRevenus.map(r => {
+  container.innerHTML = state.revenus.map(r => {
     const revExpenses = state.depenses.filter(d => d.REVENU_ID == r.ID);
     const totalExp = revExpenses.reduce((sum, d) => sum + parseFloat(d.MONTANT_CAT || 0), 0);
     const solde = parseFloat(r.MONTANT || 0) - totalExp;
@@ -381,6 +427,72 @@ function renderRevenuesCards() {
       </div>
     `;
   }).join('');
+
+  renderPaginationControls();
+}
+
+function renderPaginationControls() {
+  const container = document.getElementById('revenusPaginationContainer');
+  const info = document.getElementById('revenusPaginationInfo');
+  const list = document.getElementById('revenusPaginationList');
+  const limitSelect = document.getElementById('revenusPageLimitSelect');
+
+  if (!container || !info || !list) return;
+
+  const { page, limit, total, totalPages } = state.revenusPagination;
+
+  if (total === 0) {
+    container.classList.add('d-none');
+    container.classList.remove('d-flex');
+    return;
+  }
+
+  container.classList.remove('d-none');
+  container.classList.add('d-flex');
+  if (limitSelect) limitSelect.value = limit;
+
+  const startItem = total === 0 ? 0 : (page - 1) * limit + 1;
+  const endItem = Math.min(page * limit, total);
+  info.textContent = `Affichage de ${startItem} à ${endItem} sur ${total} revenu${total > 1 ? 's' : ''}`;
+
+  let paginationHtml = '';
+
+  // Previous button
+  paginationHtml += `
+    <li class="page-item-stitch ${page === 1 ? 'disabled' : ''}">
+      <a class="page-link-stitch" onclick="changeRevenusPage(${page - 1})" href="javascript:void(0)" aria-label="Précédent">
+        <i class="bi bi-chevron-left"></i>
+      </a>
+    </li>
+  `;
+
+  // Page Numbers
+  for (let p = 1; p <= totalPages; p++) {
+    if (p === 1 || p === totalPages || (p >= page - 1 && p <= page + 1)) {
+      paginationHtml += `
+        <li class="page-item-stitch ${p === page ? 'active' : ''}">
+          <a class="page-link-stitch" onclick="changeRevenusPage(${p})" href="javascript:void(0)">${p}</a>
+        </li>
+      `;
+    } else if ((p === page - 2 && p > 1) || (p === page + 2 && p < totalPages)) {
+      paginationHtml += `
+        <li class="page-item-stitch disabled">
+          <span class="page-link-stitch">...</span>
+        </li>
+      `;
+    }
+  }
+
+  // Next button
+  paginationHtml += `
+    <li class="page-item-stitch ${page === totalPages ? 'disabled' : ''}">
+      <a class="page-link-stitch" onclick="changeRevenusPage(${page + 1})" href="javascript:void(0)" aria-label="Suivant">
+        <i class="bi bi-chevron-right"></i>
+      </a>
+    </li>
+  `;
+
+  list.innerHTML = paginationHtml;
 }
 
 async function selectRevenuAndOpenDashboard(revenuId) {
@@ -547,8 +659,13 @@ function setupFormListeners() {
   // Revenue Search Filter
   const searchInput = document.getElementById('revenueSearchInput');
   if (searchInput) {
+    let searchTimeout;
     searchInput.addEventListener('input', () => {
-      renderRevenuesCards();
+      clearTimeout(searchTimeout);
+      searchTimeout = setTimeout(async () => {
+        state.revenusPagination.page = 1;
+        await loadRevenusPage(1);
+      }, 300);
     });
   }
 

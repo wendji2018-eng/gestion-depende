@@ -384,3 +384,50 @@ body {
   background: rgba(30, 41, 59, 0.8);
   box-shadow: 0 4px 20px rgba(139, 92, 246, 0.2);
 }
+
+/* Pagination Styling */
+.pagination-stitch {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.page-item-stitch .page-link-stitch {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-glass);
+  color: var(--text-main);
+  padding: 8px 14px;
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: var(--transition-fast);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 38px;
+  height: 38px;
+}
+
+.page-item-stitch .page-link-stitch:hover:not(.disabled) {
+  background: rgba(139, 92, 246, 0.2);
+  border-color: var(--accent-primary);
+  color: #fff;
+}
+
+.page-item-stitch.active .page-link-stitch {
+  background: var(--gradient-brand);
+  border-color: transparent;
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+}
+
+.page-item-stitch.disabled .page-link-stitch {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}
